@@ -1,0 +1,118 @@
+    %import common.NUMBER
+    %import common.ESCAPED_STRING
+    %import common.CNAME
+    %import common.NEWLINE
+    %import common.WS
+
+    %ignore WS
+
+    COMMENT: "/*" /(.|\\n|\\r)+/ "*/"
+        |  "//" /(.)+/ NEWLINE
+    %ignore COMMENT
+
+    CHAR: "char"
+    INTEGER: "integer"
+    BOOLEAN: "Boolean"
+
+    TRUE:       "true"
+    FALSE:      "false"
+    ESCAPED_CHAR: "\'" /./ "\'"
+
+    num: NUMBER  -> literal
+    str: ESCAPED_STRING  -> literal
+    char: ESCAPED_CHAR  -> literal
+    bool: (TRUE | FALSE)  -> literal
+    type_spec: (CHAR | INTEGER | BOOLEAN) -> ident
+    ident: CNAME
+
+    ADD:     "+"
+    SUB:     "-"
+    MUL:     "*"
+    DIV:     "/"
+    DIV2:    "div"
+    MOD:     "mod"
+    AND:     "and"
+    OR:      "or"
+    XOR:     "xor"
+    NOT:     "not"
+    GE:      ">="
+    LE:      "<="
+    EQUALS:  "="
+    NEQUALS: "<>"
+    GT:      ">"
+    LT:      "<"
+
+    arr_type_spec: "array" "[" "1" "." "." num "]" "of" type_spec -> arr_ident
+    ?type: type_spec | arr_type_spec
+
+    ?start: program
+
+    ?program: "program" ident ";" block "." -> program
+    ?prog2: statement_list
+
+    ?block: declarations compound_statement -> block
+
+    ?declarations: var_decl ";"
+    ?var_decl: "var" variable_declaration (";" variable_declaration)*
+    ?variable_declaration: ident ("," ident)* ":" type -> vars_decl
+
+    ?compound_statement: "begin" statement_list "end"
+
+    statement_list: ( statement ";"* )*
+
+    ?variable: ident
+             | ident "[" expr "]" -> arr
+
+    ?assignment_statement: variable ":=" expr -> assign
+
+    ?statement: compound_statement
+              | assignment_statement
+              | if_statement
+              | for_statement
+              | while_statement
+              | repeat_statement
+              | rws_statement
+              | declarations
+
+    ?if_statement: "if" expr "then" statement ("else" statement)? -> if
+        condition: expr (comparison_operator expr)*
+        comparison_operator: (EQUALS | NEQUALS | LT | LE | GT | GE)
+
+    ?for_statement: "for" assignment_statement ( "to" | "downto" ) expr "do" statement -> pascal_for
+
+    ?while_statement: "while" expr "do" statement -> while
+
+    ?repeat_statement: "repeat" statement "until" expr -> repeat
+
+    ?rws_statement: ident "(" expr ")" -> rws
+    rws_inner: ("write" | "writeln" | "read" | "readln" | "Inc" | "Dec" | "Abs") -> ident
+
+    ?group: num | str | char | bool
+        | variable
+        | "(" expr ")"
+
+    ?mult: group
+        | mult ( MUL | DIV | DIV2 | MOD) group  -> bin_op
+
+    ?add: mult
+        | add ( ADD | SUB ) mult  -> bin_op
+
+    ?compare1: add
+        | add ( GT | LT | GE | LE ) add  -> bin_op
+
+    ?compare2: compare1
+        | compare1 ( EQUALS | NEQUALS ) compare1  -> bin_op
+
+    ?logical_and: compare2
+        | logical_and AND compare2  -> bin_op
+
+    ?logical_xor: logical_and
+        | logical_xor XOR logical_and  -> bin_op
+
+    ?logical_or: logical_xor
+        | logical_or OR logical_xor  -> bin_op
+
+    ?logical_not: logical_or
+        | logical_not NOT logical_or  -> bin_op
+
+    ?expr: logical_not
