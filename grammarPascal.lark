@@ -22,7 +22,7 @@
     str: ESCAPED_STRING  -> literal
     char: ESCAPED_CHAR  -> literal
     bool: (TRUE | FALSE)  -> literal
-    type_spec: (CHAR | INTEGER | BOOLEAN) -> ident
+    type_spec: (CHAR | INTEGER | BOOLEAN) -> type
     ident: CNAME
 
     ADD:     "+"
@@ -53,8 +53,8 @@
     ?block: declarations compound_statement -> block
 
     ?declarations: var_decl ";"
-    ?var_decl: "var" variable_declaration (";" variable_declaration)*
-    ?variable_declaration: ident ("," ident)* ":" type -> vars_decl
+    ?var_decl: "var" variable_declaration (";" variable_declaration)* -> var_vars
+    ?variable_declaration: ident ":" type -> vars_decl
 
     ?compound_statement: "begin" statement_list "end"
 

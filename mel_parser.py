@@ -37,11 +37,17 @@ class MelASTBuilder(Transformer):
                 return StmtListNode(*sum(([*n] if isinstance(n, Iterable) else [n] for n in args), []))
 
             return get_node
-        if item in ('var_decl', ):
-            def get_node(*args):
-                return VarsDeclNode(*sum(([*n] if isinstance(n, Iterable) else [n] for n in args), []))
-
-            return get_node
+        # if item in ('var_decl', ):
+        #     def get_node(*args):
+        #         return VarsDeclNode(*sum(([*n] if isinstance(n, Iterable) else [n] for n in args), []))
+        #
+        #     return get_node
+        #
+        # if item in ('var_vars', ):
+        #     def get_node(*args):
+        #         return VarVarsNode(*sum(([*n] if isinstance(n, Iterable) else [n] for n in args), []))
+        #
+        #     return get_node
 
         if item in ('program', ):
             def get_node(*args):
