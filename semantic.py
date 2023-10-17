@@ -22,7 +22,6 @@ class BinOp(Enum):
     EQUALS = '='
     NEQUALS = '<>'
 
-
     def __str__(self):
         return self.value
 
@@ -300,17 +299,34 @@ BIN_OP_TYPE_COMPATIBILITY = {
 
 
 BUILT_IN_OBJECTS = '''
-
+    program builtIn;
+    var global: Boolean;
+    function Write(): Boolean;
+        begin return True; end;
+    function WriteLn(): Boolean;
+        begin return True; end;
+    function Read(): Boolean;
+        begin return True; end;
+    function ReadLn(): Boolean;
+        begin return True; end;
+    function Inc(a: integer): integer;
+        begin return a; end;
+    function Dec(a: integer): integer;
+        begin return a; end;
+    function Abs(a: integer): integer;
+        begin return a; end;
+    begin
+    end.
 '''
 
 
 def prepare_global_scope() -> IdentScope:
     from mel_parser import parse
 
-    #prog = parse(BUILT_IN_OBJECTS)
+    prog = parse(BUILT_IN_OBJECTS)
     scope = IdentScope()
-    #prog.semantic_check(scope)
-    # for name, ident in scope.idents.items():
-    #     ident.built_in = True
+    prog.semantic_check(scope)
+    for name, ident in scope.idents.items():
+        ident.built_in = True
     scope.var_index = 0
     return scope

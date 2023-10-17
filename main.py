@@ -7,35 +7,42 @@ def main():
     prog = '''
         program CompilerTest;
         var a: integer;
+            i: integer;
+        function Sum(a: integer, b: integer): integer;
+            begin
+                b := a + b;
+                return b;
+            end;
+        function Summary(a: integer, b: integer): integer;
+            begin
+                b := a + b;
+                return b;
+            end;
         begin
             a := 5;
-        end.
-    '''
-    prog2 = '''
-        program CompilerTest;
-        var a: integer;
-            b: array[1..10] of char;
-        begin
-            temp := 5;
-            for i := 1 to 10 do
-                begin
-                    b[i+3]:=b[q]+1;
-                end
-            if temp>=2112 then
-                temp:=0
-                else
-                temp:=100
-                
-            while a and b<10 do
-                begin
-                    var b: Boolean;
-                end
-                
+            
             repeat
                 begin
-                    read6(a);
+                    a := a - 1;
+                    Write(a);
+                    Inc(a);
                 end
-            until b div 5 = 4
+            until a * 5 = 4
+            
+            while a >= 3 and a < 10 do
+                begin
+                    a := a + 3;
+                end
+                
+            if a>=2112 then
+                a:=0
+                else    
+                a:=100
+                
+            for i := 1 to 10 do
+                begin
+                    a := a + i;
+                end
         end.
     '''
 

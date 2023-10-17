@@ -45,12 +45,17 @@
     arr_type_spec: "array" "[" "1" "." "." num "]" "of" type_spec -> arr_ident
     ?type: type_spec | arr_type_spec
 
-    ?start: program
+    ?start: program | prog2
 
     ?program: "program" ident ";" block "." -> program
-    ?prog2: statement_list
+    ?prog2: func_list
 
-    ?block: declarations compound_statement -> block
+    ?block: declarations func_list compound_statement -> block
+    ?func_list: (func)*
+    ?func: "function" ident "(" params "):" type ";" "begin" statement_list return "end;"
+    params: (param ("," param)*)?
+    ?param: ident ":" type -> param
+    ?return: "return" expr ";" -> return
 
     ?declarations: var_decl ";"
     ?var_decl: "var" variable_declaration (";" variable_declaration)* -> var_vars
@@ -85,7 +90,7 @@
     ?repeat_statement: "repeat" statement "until" expr -> repeat
 
     ?rws_statement: ident "(" expr ")" -> rws
-    rws_inner: ("write" | "writeln" | "read" | "readln" | "Inc" | "Dec" | "Abs") -> ident
+    rws_inner: ("Write" | "WriteLn" | "Read" | "ReadLn" | "Inc" | "Dec" | "Abs") -> ident
 
     ?group: num | str | char | bool
         | variable
