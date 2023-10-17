@@ -5,6 +5,7 @@ from enum import Enum
 
 from semantic import TYPE_CONVERTIBILITY, BIN_OP_TYPE_COMPATIBILITY,\
     BinOp, TypeDesc, IdentDesc, ScopeType, IdentScope, SemanticException
+from msil import CodeLabel, CodeGenerator, MSIL_TYPE_NAMES, PROGRAM_CLASS_NAME, RUNTIME_CLASS_NAME
 
 
 class AstNode(ABC):
@@ -64,6 +65,9 @@ class AstNode(ABC):
     def semantic_check(self, scope: IdentScope) -> None:
         pass
 
+    def msil(self, gen: CodeGenerator) -> None:
+        pass
+
 
 class ExprNode(AstNode):
     pass
@@ -89,6 +93,12 @@ class LiteralNode(ExprNode):
         else:
             self.semantic_error('Неизвестный тип {} для {}'.format(type(self.value), self.value))
 
+    def msil(self, gen: CodeGenerator) -> None:
+        if isinstance(self.value, int):
+            gen.add('   ldc.i4 {}'.format(self.value))
+        else:
+            pass
+
 
 class IdentNode(ExprNode):
     def __init__(self, name: str,
@@ -105,6 +115,16 @@ class IdentNode(ExprNode):
             self.semantic_error('Идентификатор {} не найден'.format(self.name))
         self.node_type = ident.type
         self.node_ident = ident
+
+    def msil(self, gen: CodeGenerator) -> None:
+        if self.node_ident.scope == ScopeType.LOCAL:
+            gen.add('   ldloc {}'.format(self.node_ident.index))
+        elif self.node_ident.scope == ScopeType.PARAM:
+            gen.add('   ldarg {}'.format(self.node_ident.index))
+        elif self.node_ident.scope in (ScopeType.GLOBAL, ScopeType.GLOBAL_LOCAL):
+            gen.add('   ldsfld {} {}::_gv{}'.format(MSIL_TYPE_NAMES[self.node_ident.type.base_type], PROGRAM_CLASS_NAME, self.node_ident.index))
+        else:
+            pass
 
 # TODO: realization semantic for arrays
 class ArrIdentNode(ExprNode):
@@ -155,6 +175,10 @@ class TypeNode(IdentNode):
         if self.type is None:
             self.semantic_error('Неизвестный тип {}'.format(self.name))
 
+    def msil(self, gen: CodeGenerator) -> None:
+        if self.type is not None:
+            gen.add('   {}'.format(self.type))
+
 
 class BinOpNode(ExprNode):
     def __init__(self, op: BinOp, arg1: ExprNode, arg2: ExprNode,
@@ -201,6 +225,46 @@ class BinOpNode(ExprNode):
             self.op, self.arg1.node_type, self.arg2.node_type
         ))
 
+    def msil(self, gen: CodeGenerator) -> None:
+        self.arg1.msil(gen)
+        self.arg2.msil(gen)
+        if self.op == BinOp.GT:
+            gen.add('   cgt')
+        elif self.op == BinOp.ADD:
+            gen.add('   add')
+        elif self.op == BinOp.NEQUALS:
+            gen.add('   ceq')
+            gen.add('   ldc.i4.0')
+            gen.add('   ceq')
+        elif self.op == BinOp.EQUALS:
+            gen.add('   ceq')
+        elif self.op == BinOp.LT:
+            gen.add('   clt')
+        elif self.op == BinOp.GE:
+            gen.add('   clt')
+            gen.add('   lds.i4.0')
+            gen.add('   ceq')
+        elif self.op == BinOp.LE:
+            gen.add('   cgt')
+            gen.add('   lds.i4.0')
+            gen.add('   ceq')
+        elif self.op == BinOp.SUB:
+            gen.add('   sub')
+        elif self.op == BinOp.MUL:
+            gen.add('   mul')
+        elif self.op == BinOp.DIV:
+            gen.add('   div')
+        elif self.op == BinOp.DIV2:
+            gen.add('   div')
+        elif self.op == BinOp.MOD:
+            gen.add('   rem')
+        elif self.op == BinOp.AND:
+            gen.add('   and')
+        elif self.op == BinOp.OR:
+            gen.add('   or')
+        else:
+            pass
+
 
 class StmtNode(ExprNode):
     pass
@@ -229,6 +293,10 @@ class VarsDeclNode(StmtNode):
             self.var.semantic_error(e.message)
         self.var.semantic_check(scope)
 
+    def msil(self, gen: CodeGenerator) -> None:
+        self.vars_type.msil(gen)
+        self.var.msil(gen)
+
 class VarVarsNode(StmtNode):
     def __init__(self, *exprs: VarsDeclNode,
                  row: Optional[int] = None, line: Optional[int] = None, **props):
@@ -246,9 +314,15 @@ class VarVarsNode(StmtNode):
         for expr in self.exprs:
             expr.semantic_check(scope)
 
+    def msil(self, gen: CodeGenerator) -> None:
+        gen.add('   .locals init(')
+        for expr in self.exprs:
+            expr.msil(gen)
+        gen.add('   )')
+
 
 class CallNode(StmtNode):
-    def __init__(self, func: IdentNode, *params: Tuple[ExprNode],
+    def __init__(self, func: IdentNode, *params: ExprNode,
                  row: Optional[int] = None, line: Optional[int] = None, **props):
         super().__init__(row=row, line=line, **props)
         self.func = func
@@ -299,6 +373,14 @@ class CallNode(StmtNode):
             self.func.node_ident = func
             self.node_type = func.type.return_type
 
+    def msil(self, gen: CodeGenerator) -> None:
+        for param in self.params:
+            param.msil(gen)
+        class_name = RUNTIME_CLASS_NAME if self.func.node_ident.built_in else PROGRAM_CLASS_NAME
+        param_types = ', '.join(MSIL_TYPE_NAMES[param.type.base_type] for param in self.params)
+        cmd = f'   call {MSIL_TYPE_NAMES[self.node_type.base_type]} class {class_name}::{self.func.name}({param_types})'
+        gen.add(cmd)
+
 
 class ReturnNode(StmtNode):
     """Класс для представления в AST-дереве оператора return
@@ -322,6 +404,10 @@ class ReturnNode(StmtNode):
         if func is None:
             self.semantic_error('Оператор return применим только к функции')
         self.val = type_convert(self.val, func.func.type.return_type, self, 'возвращаемое значение')
+
+    def msil(self, gen: CodeGenerator) -> None:
+        self.val.msil(gen)
+        gen.add('   ret')
 
 
 class ParamNode(StmtNode):
@@ -393,6 +479,29 @@ class FuncNode(StmtNode):
         except SemanticException as e:
             self.name.semantic_error("Повторное объявление функции {}".format(self.name.name))
         self.body.semantic_check(scope)
+
+    def msil(self, gen: CodeGenerator) -> None:
+        params = ''
+        for p in self.params:
+            if len(params) > 0:
+                params += ', '
+            params += 'int32 ' + str(p.name.name)
+        gen.add('   .method public static void {}({}) cil managed'.format(self.name, params))
+        gen.add('   {')
+        '''
+        if 
+        line = '.local init'
+
+        .locals
+        init([0]
+        int32
+        c,
+        [1]
+        int32
+        CS$1$0000)
+        '''
+        self.body.msil(gen)
+        gen.add('   }')
 
 
 class TypeConvertNode(ExprNode):
@@ -475,6 +584,15 @@ class AssignNode(StmtNode):
         self.val = type_convert(self.val, self.var.node_type, self, 'присваиваемое значение')
         self.node_type = self.var.node_type
 
+    def msil(self, gen: CodeGenerator) -> None:
+        self.val.msil(gen)
+        if self.var.node_ident.scope == ScopeType.LOCAL:
+            gen.add('   stloc', self.var.node_ident.index)
+        elif self.var.node_ident.scope == ScopeType.PARAM:
+            gen.add('   starg', self.var.node_ident.index)
+        elif self.var.node_ident.scope in (ScopeType.GLOBAL, ScopeType.GLOBAL_LOCAL):
+            gen.add(f'   stsfld {MSIL_TYPE_NAMES[self.var.node_ident.type.base_type]} Program::_gv{self.var.node_ident.index}')
+
 
 class IfNode(StmtNode):
     def __init__(self, cond: ExprNode, then_stmt: StmtNode, else_stmt: Optional[StmtNode] = None,
@@ -497,6 +615,18 @@ class IfNode(StmtNode):
         self.then_stmt.semantic_check(IdentScope(scope))
         if self.else_stmt:
             self.else_stmt.semantic_check(IdentScope(scope))
+
+    def msil(self, gen: CodeGenerator) -> None:
+        else_label = CodeLabel()
+        end_label = CodeLabel()
+        self.cond.msil(gen)
+        gen.add('   brtrue', else_label)
+        self.then_stmt.msil(gen)
+        gen.add('   br', end_label)
+        gen.add('   ', label=else_label)
+        if self.else_stmt:
+            self.else_stmt.msil(gen)
+        gen.add('   ', label=end_label)
 
 
 class ForNode(StmtNode):
@@ -545,6 +675,16 @@ class WhileNode(StmtNode):
         self.expr = type_convert(self.expr, TypeDesc.BOOL, None, 'условие')
         self.stmt.semantic_check(scope)
 
+    def msil(self, gen: CodeGenerator) -> None:
+        start_label = CodeLabel()
+        end_label = CodeLabel()
+        gen.add('   {}'.format(start_label))
+        self.expr.msil(gen)
+        gen.add('   brfalse {}'.format(end_label))
+        self.stmt.msil(gen)
+        gen.add('   br {}'.format(start_label))
+        gen.add('   {}'.format(end_label))
+
 class RepeatNode(StmtNode):
     def __init__(self, stmt: StmtNode, expr: ExprNode,
                  row: Optional[int] = None, line: Optional[int] = None, **props):
@@ -563,6 +703,13 @@ class RepeatNode(StmtNode):
         self.expr.semantic_check(scope)
         self.expr = type_convert(self.expr, TypeDesc.BOOL, None, 'условие')
         self.stmt.semantic_check(scope)
+
+    def msil(self, gen: CodeGenerator) -> None:
+        start_label = CodeLabel()
+        gen.add('   {}'.format(start_label))
+        self.stmt.msil(gen)
+        self.expr.msil(gen)
+        gen.add('   brtrue {}'.format(start_label))
 
 class PascalForNode(StmtNode):
     def __init__(self, assign: AssignNode, expr: ExprNode, stmt: StmtNode,
@@ -585,6 +732,18 @@ class PascalForNode(StmtNode):
         self.expr = type_convert(self.expr, TypeDesc.BOOL, None, 'условие')
         self.stmt.semantic_check(scope)
 
+    def msil(self, gen: CodeGenerator) -> None:
+        start_label = CodeLabel()
+        end_label = CodeLabel()
+        self.assign.msil(gen)
+        gen.add('   {}'.format(start_label))
+        self.expr.msil(gen)
+        gen.add('   brfalse {}'.format(end_label))
+        self.stmt.msil(gen)
+        gen.add('   br {}'.format(start_label))
+        gen.add('   {}'.format(end_label))
+
+
 class StmtListNode(StmtNode):
     def __init__(self, *exprs: StmtNode,
                  row: Optional[int] = None, line: Optional[int] = None, **props):
@@ -601,6 +760,10 @@ class StmtListNode(StmtNode):
     def semantic_check(self, scope: IdentScope) -> None:
         for expr in self.exprs:
             expr.semantic_check(scope)
+
+    def msil(self, gen: CodeGenerator) -> None:
+        for expr in self.exprs:
+            expr.msil(gen)
 
 
 class FuncListNode(StmtNode):
@@ -619,6 +782,10 @@ class FuncListNode(StmtNode):
     def semantic_check(self, scope: IdentScope) -> None:
         for expr in self.exprs:
             expr.semantic_check(scope)
+
+    def msil(self, gen: CodeGenerator) -> None:
+        for expr in self.exprs:
+            expr.msil(gen)
 
 
 class BlockNode(StmtNode):
@@ -642,6 +809,11 @@ class BlockNode(StmtNode):
         self.func_list.semantic_check(scope)
         self.stmt_list.semantic_check(scope)
 
+    def msil(self, gen: CodeGenerator) -> None:
+        self.vars.msil(gen)
+        self.func_list.msil(gen)
+        self.stmt_list.msil(gen)
+
 class ProgramNode(StmtNode):
     def __init__(self, id: IdentNode, block: BlockNode,
                  row: Optional[int] = None, line: Optional[int] = None, **props):
@@ -658,6 +830,9 @@ class ProgramNode(StmtNode):
 
     def semantic_check(self, scope: IdentScope) -> None:
         self.block.semantic_check(scope)
+
+    def msil(self, gen: CodeGenerator) -> None:
+        self.block.msil(gen)
 
 class RwsNode(StmtNode):
     def __init__(self, id: IdentNode, expr: ExprNode,
@@ -676,6 +851,15 @@ class RwsNode(StmtNode):
     def semantic_check(self, scope: IdentScope) -> None:
         self.id.semantic_check(scope)
         self.expr.semantic_check(scope)
+
+    # def msil(self, gen: CodeGenerator) -> None:
+    #     self.expr.msil(gen)
+    #     if self.id.name == "Write" or "WriteLn":
+    #         gen.add('   call void [mscorlib]System.Console::WriteLine()')
+    #     if self.id.name == "Read" or "ReadLn":
+    #         gen.add('   call void [mscorlib]System.Console::ReadLine()')
+    #     else:
+    #         pass
 
 
 _empty = StmtListNode()

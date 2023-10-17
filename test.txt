@@ -1,0 +1,12 @@
+program XDD;
+    var b: char;
+        c: Boolean;
+        a: integer;
+        i: integer;
+    begin
+        repeat
+            begin
+                a := a - 1;
+            end
+        until a * 5 = 4
+    end.
